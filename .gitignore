@@ -1,0 +1,30 @@
+# dependencies
+node_modules
+
+# next.js build output
+.next
+dist
+build
+tsconfig.tsbuildinfo
+
+# python
+__pycache__
+*.pyc
+.venv
+venv
+backend/venv
+
+# env & secrets
+.env
+.env.local
+certificates
+
+# backend runtime data
+backend/uploads
+backend/.paddleocr
+
+# vercel
+.vercel
+
+# macos
+.DS_Store
