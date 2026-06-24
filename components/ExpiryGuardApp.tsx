@@ -181,6 +181,7 @@ export function ExpiryGuardApp() {
                     acknowledgeAlerts();
                     setScreen("alerts");
                   }}
+                  onDismissBanner={acknowledgeAlerts}
                   onOpenProduct={(product) => {
                     setSelectedProduct(product);
                     setScreen("detail");

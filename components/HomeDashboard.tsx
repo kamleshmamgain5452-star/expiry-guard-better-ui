@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Bell, CalendarClock, ChevronRight, Languages, PackageCheck, ScanLine } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight, Languages, PackageCheck, ScanLine, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -21,6 +21,7 @@ type HomeDashboardProps = {
   onOpenProduct: (product: Product) => void;
   onOpenAlerts: () => void;
   onViewAlerts?: () => void;
+  onDismissBanner?: () => void;
   alertViewed?: boolean;
   onSelectStatusFilter: (status: "safe" | "near_expiry" | "expired") => void;
   notificationsEnabled?: boolean;
@@ -34,6 +35,7 @@ export function HomeDashboard({
   onOpenProduct,
   onOpenAlerts,
   onViewAlerts,
+  onDismissBanner,
   alertViewed = false,
   onSelectStatusFilter,
   notificationsEnabled = true
@@ -139,18 +141,33 @@ export function HomeDashboard({
                 {alertBanner.text}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={onViewAlerts ?? onOpenAlerts}
-              className={cn(
-                "text-xs font-black px-3 py-1.5 rounded-full uppercase tracking-wider shrink-0 transition-opacity active:opacity-75",
-                alertBanner.type === "critical"
-                  ? "bg-red-200/50 text-red-900 dark:bg-red-900/40 dark:text-red-200"
-                  : "bg-blue-200/50 text-blue-900 dark:bg-blue-900/40 dark:text-blue-200"
-              )}
-            >
-              {t("view")}
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={onViewAlerts ?? onOpenAlerts}
+                className={cn(
+                  "text-xs font-black px-3 py-1.5 rounded-full uppercase tracking-wider transition-opacity active:opacity-75",
+                  alertBanner.type === "critical"
+                    ? "bg-red-200/50 text-red-900 dark:bg-red-900/40 dark:text-red-200"
+                    : "bg-blue-200/50 text-blue-900 dark:bg-blue-900/40 dark:text-blue-200"
+                )}
+              >
+                {t("view")}
+              </button>
+              <button
+                type="button"
+                onClick={onDismissBanner}
+                aria-label={t("dismiss")}
+                className={cn(
+                  "grid h-7 w-7 place-items-center rounded-full transition-opacity active:opacity-75",
+                  alertBanner.type === "critical"
+                    ? "text-red-700/70 hover:bg-red-200/40 dark:text-red-200/70 dark:hover:bg-red-900/30"
+                    : "text-blue-700/70 hover:bg-blue-200/40 dark:text-blue-200/70 dark:hover:bg-blue-900/30"
+                )}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

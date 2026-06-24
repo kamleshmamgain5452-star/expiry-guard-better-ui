@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BellRing, CalendarClock, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import { Card } from "@/components/Card";
@@ -12,9 +12,22 @@ type AlertsScreenProps = {
   onOpenProduct: (product: Product) => void;
 };
 
+const DISMISSED_KEY = "expiryguard_dismissed_alerts";
+
 export function AlertsScreen({ products, onOpenProduct }: AlertsScreenProps) {
   const { t } = useI18n();
+  // Persist dismissed alerts so they stay cleared after navigating away and back.
   const [dismissed, setDismissed] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(DISMISSED_KEY);
+      if (stored) setDismissed(JSON.parse(stored) as string[]);
+    } catch {
+      // ignore malformed storage
+    }
+  }, []);
+
   const alerts = useMemo(
     () =>
       products
@@ -27,7 +40,23 @@ export function AlertsScreen({ products, onOpenProduct }: AlertsScreenProps) {
     [dismissed, products]
   );
 
-  const dismiss = (id: string) => setDismissed((current) => [...current, id]);
+  const dismiss = (id: string) =>
+    setDismissed((current) => {
+      if (current.includes(id)) return current;
+      const next = [...current, id];
+      try {
+        window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage write failures
+      }
+      return next;
+    });
+
+  // Opening an alert counts as "seen" — clear it from the list so it doesn't linger.
+  const openAndDismiss = (product: Product) => {
+    dismiss(product.id);
+    onOpenProduct(product);
+  };
 
   return (
     <main className="h-full w-full overflow-y-auto no-scrollbar px-4 pb-28 pt-4 safe-top">
@@ -78,7 +107,7 @@ export function AlertsScreen({ products, onOpenProduct }: AlertsScreenProps) {
             >
               <button
                 type="button"
-                onClick={() => onOpenProduct(product)}
+                onClick={() => openAndDismiss(product)}
                 className="flex w-full items-center gap-4 rounded-[28px] border border-white/80 bg-white/90 p-4 text-left shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.07]"
               >
                 <div className="grid h-14 w-14 shrink-0 place-items-center rounded-3xl bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-200">
