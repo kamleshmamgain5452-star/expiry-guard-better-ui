@@ -51,11 +51,18 @@ PaddleOCR downloads OCR models the first time it runs. For Hindi scans, the back
 
 ## Environment
 
-Create `.env.local` if the API runs somewhere other than localhost:
+This app needs a free **Groq API key** to read product labels.
+
+👉 **See [API_KEY_SETUP.md](./API_KEY_SETUP.md) for a simple step-by-step guide.**
+
+Quick version — create a `.env.local` file in the project root:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
+GROQ_API_KEY=gsk_your_key_here
 ```
+
+`.env.local` is gitignored, so your key is never uploaded to GitHub.
 
 ## API
 
