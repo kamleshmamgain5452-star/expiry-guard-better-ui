@@ -436,6 +436,30 @@ export function ScannerScreen({ onBack, onComplete }: ScannerScreenProps) {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* OCR Processing Overlay — reassures during the 2-4s label read */}
+            <AnimatePresence>
+              {isProcessing && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[36px] bg-slate-950/85 backdrop-blur-sm"
+                >
+                  <motion.span
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="block h-14 w-14 rounded-full border-[3px] border-guard-400/25 border-t-guard-400"
+                  />
+                  <p className="mt-4 text-base font-black text-guard-200">
+                    {t("processing")}
+                  </p>
+                  <p className="mt-1.5 px-6 text-center text-xs font-semibold leading-5 text-white/65">
+                    {t("readingLabelHint")}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </section>
 

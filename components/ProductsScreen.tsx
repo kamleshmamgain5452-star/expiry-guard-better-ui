@@ -132,10 +132,10 @@ export function ProductsScreen({
 
   // Helper for text-color representing remaining days countdown
   const getCountdownColorClass = (days: number | null) => {
-    if (days === null) return "text-slate-400 dark:text-slate-550";
+    if (days === null) return "text-slate-400 dark:text-slate-500";
     if (days <= 3) return "text-red-600/90 dark:text-red-400/90";
     if (days <= 7) return "text-amber-600/90 dark:text-amber-400/90";
-    return "text-emerald-605 dark:text-emerald-400/80";
+    return "text-emerald-600 dark:text-emerald-400/80";
   };
 
   // Helper for mapping status badge parameters dynamically
@@ -195,7 +195,7 @@ export function ProductsScreen({
           <h2 className="text-lg font-black text-slate-950 dark:text-white">
             {t("noProducts")}
           </h2>
-          <p className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-450 dark:text-slate-400 max-w-xs">
+          <p className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-400 dark:text-slate-400 max-w-xs">
             {t("startAddingHint")}
           </p>
           <div className="mt-6 flex flex-col gap-2 w-full max-w-[200px]">
@@ -222,7 +222,7 @@ export function ProductsScreen({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t("searchPlaceholder")}
-              className="h-full flex-1 bg-transparent text-xs font-semibold text-slate-900 outline-none dark:text-white placeholder-slate-400 dark:placeholder-slate-550"
+              className="h-full flex-1 bg-transparent text-xs font-semibold text-slate-900 outline-none dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
             />
             {searchQuery && (
               <button
@@ -248,7 +248,7 @@ export function ProductsScreen({
                     "flex-1 h-7 rounded-[10px] text-[10.5px] font-bold transition-all duration-150 flex items-center justify-center",
                     isActive
                       ? "bg-white text-slate-950 shadow-sm dark:bg-white/[0.06] dark:text-white"
-                      : "text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-350"
+                      : "text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
                   )}
                 >
                   {st === "all"
@@ -278,7 +278,7 @@ export function ProductsScreen({
                       "h-6 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 transition-all",
                       isActive
                         ? "bg-slate-200 text-slate-900 dark:bg-white/10 dark:text-white"
-                        : "bg-transparent text-slate-400 hover:text-slate-650 dark:text-slate-500 dark:hover:text-slate-350"
+                        : "bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                     )}
                   >
                     {cat === "all" ? t("filterAll") : t(cat as any)}
@@ -292,7 +292,7 @@ export function ProductsScreen({
               <button
                 type="button"
                 onClick={() => setSortOpen(!sortOpen)}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-450 hover:text-slate-750 dark:text-slate-400 dark:hover:text-white transition-all"
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-all"
               >
                 <span>{t("sortBy").split(" ")[0]}: </span>
                 <span className="text-slate-800 dark:text-slate-200 font-extrabold flex items-center">
@@ -364,7 +364,7 @@ export function ProductsScreen({
             ) : (
               <Card className="grid min-h-40 place-items-center text-center py-6">
                 <div>
-                  <p className="text-sm font-bold text-slate-850 dark:text-white">
+                  <p className="text-sm font-bold text-slate-800 dark:text-white">
                     {t("noProducts")}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
@@ -445,7 +445,7 @@ export function ProductsScreen({
               <h2 className="text-base font-black text-slate-950 dark:text-white">
                 {t("deleteConfirmTitle")}
               </h2>
-              <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-550 dark:text-slate-350">
+              <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-300">
                 {t("deleteConfirmBody", { name: deletingProduct.productName || t("unknownProduct") }) as any}
               </p>
               <div className="mt-4 flex gap-2">
@@ -503,7 +503,7 @@ export function ProductsScreen({
               ? "bg-red-400"
               : isSoon
               ? "bg-amber-400"
-              : "bg-emerald-450/40"
+              : "bg-emerald-500/40"
           )}
         />
 
@@ -537,11 +537,11 @@ export function ProductsScreen({
         </button>
 
         {/* Right Actions rounded group */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-slate-50/20 p-0.5 dark:bg-white/[0.01] shrink-0 opacity-40 hover:opacity-100 dark:opacity-50 dark:hover:opacity-100 transition-opacity duration-150">
+        <div className="flex items-center gap-0.5 rounded-lg bg-slate-50/20 p-0.5 dark:bg-white/[0.01] shrink-0 opacity-80 hover:opacity-100 dark:opacity-70 dark:hover:opacity-100 transition-opacity duration-150">
           <button
             type="button"
             onClick={() => onEditProduct(product)}
-            className="grid h-7 w-7 place-items-center rounded-md text-slate-405 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-white/5 dark:hover:text-white transition-all duration-150"
+            className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-white/5 dark:hover:text-white transition-all duration-150"
             aria-label={t("edit")}
           >
             <Edit2 className="h-3 w-3" />
@@ -550,7 +550,7 @@ export function ProductsScreen({
           <button
             type="button"
             onClick={() => setConfirmDeleteId(product.id)}
-            className="grid h-7 w-7 place-items-center rounded-md text-slate-405 hover:bg-slate-100 hover:text-red-600 dark:text-slate-500 dark:hover:bg-white/5 dark:hover:text-red-400 transition-all duration-150"
+            className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:text-slate-500 dark:hover:bg-white/5 dark:hover:text-red-400 transition-all duration-150"
             aria-label={t("delete")}
           >
             <Trash2 className="h-3 w-3" />
@@ -583,7 +583,7 @@ function ProductThumb({ product, isCritical, isSoon }: ProductThumbProps) {
               ? "bg-red-400"
               : isSoon
               ? "bg-amber-400"
-              : "bg-emerald-450"
+              : "bg-emerald-500"
           )}
         />
       </div>
@@ -598,7 +598,7 @@ function ProductThumb({ product, isCritical, isSoon }: ProductThumbProps) {
           ? "bg-red-50/40 text-red-500/80 dark:bg-red-950/20 dark:text-red-300/80"
           : isSoon
           ? "bg-amber-50/40 text-amber-500/80 dark:bg-amber-950/20 dark:text-amber-300/80"
-          : "bg-slate-50 text-slate-400 dark:bg-white/[0.01] dark:text-slate-550"
+          : "bg-slate-50 text-slate-400 dark:bg-white/[0.01] dark:text-slate-500"
       )}
     >
       <CalendarClock className="h-4.5 w-4.5" />
