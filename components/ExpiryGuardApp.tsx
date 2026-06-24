@@ -13,6 +13,7 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { ProductsScreen } from "@/components/ProductsScreen";
 import { useI18n } from "@/hooks/useI18n";
 import { useProducts } from "@/hooks/useProducts";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { daysUntil } from "@/utils/dates";
 import type { Product, ScanResult } from "@/types/product";
 
@@ -43,8 +44,14 @@ type Screen =
   | "settings";
 
 export function ExpiryGuardApp() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { products, summary, addProduct, updateProduct, deleteProduct, restoreProduct } = useProducts();
+  const push = usePushNotifications();
+
+  // Keep the server's copy of products current so push reminders stay accurate.
+  useEffect(() => {
+    push.syncProducts(products, locale);
+  }, [products, locale, push.subscribed]); // eslint-disable-line react-hooks/exhaustive-deps
   const [screen, setScreen] = useState<Screen>("splash");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -297,6 +304,14 @@ export function ExpiryGuardApp() {
                 <SettingsScreen
                   notificationsEnabled={notificationsEnabled}
                   onToggleNotifications={handleToggleNotifications}
+                  pushSupported={push.supported}
+                  pushNeedsInstall={push.needsInstall}
+                  pushSubscribed={push.subscribed}
+                  pushBusy={push.busy}
+                  pushPermission={push.permission}
+                  onEnablePush={() => push.subscribe(products, locale)}
+                  onDisablePush={push.unsubscribe}
+                  onTestPush={push.sendTest}
                 />
               )}
             </motion.div>

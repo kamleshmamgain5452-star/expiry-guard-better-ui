@@ -10,18 +10,21 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "@zxing/browser": "^0.1.5",
     "framer-motion": "latest",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "sharp": "^0.33.2"
+    "sharp": "^0.33.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "eslint": "latest",
     "eslint-config-next": "latest",

@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "ExpiryGuard"
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png"
   }
 };
 

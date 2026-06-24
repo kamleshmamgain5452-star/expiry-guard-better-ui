@@ -9,5 +9,11 @@
       "entrypoint": "api.main:app",
       "routePrefix": "/_/backend"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/check-expiry",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

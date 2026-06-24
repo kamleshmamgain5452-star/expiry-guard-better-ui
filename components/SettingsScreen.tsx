@@ -1,4 +1,4 @@
-import { Info, Languages, Moon, Server, ShieldCheck, Smartphone, Bell } from "lucide-react";
+import { Info, Languages, Moon, Server, ShieldCheck, Smartphone, Bell, BellRing, Check } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Card } from "@/components/Card";
@@ -10,11 +10,39 @@ import { cn } from "@/utils/cn";
 type SettingsScreenProps = {
   notificationsEnabled: boolean;
   onToggleNotifications: (enabled: boolean) => void;
+  pushSupported: boolean;
+  pushNeedsInstall: boolean;
+  pushSubscribed: boolean;
+  pushBusy: boolean;
+  pushPermission: NotificationPermission | "unsupported";
+  onEnablePush: () => Promise<{ ok: boolean; reason?: string }>;
+  onDisablePush: () => Promise<void>;
+  onTestPush: () => Promise<boolean>;
 };
 
-export function SettingsScreen({ notificationsEnabled, onToggleNotifications }: SettingsScreenProps) {
+export function SettingsScreen({
+  notificationsEnabled,
+  onToggleNotifications,
+  pushSupported,
+  pushNeedsInstall,
+  pushSubscribed,
+  pushBusy,
+  pushPermission,
+  onEnablePush,
+  onDisablePush,
+  onTestPush
+}: SettingsScreenProps) {
   const { t, locale, setLocale } = useI18n();
   const { darkMode, setDarkMode } = useTheme();
+  const [testSent, setTestSent] = useState(false);
+
+  const handleTest = async () => {
+    const ok = await onTestPush();
+    if (ok) {
+      setTestSent(true);
+      window.setTimeout(() => setTestSent(false), 4000);
+    }
+  };
 
   return (
     <main className="h-full w-full overflow-y-auto no-scrollbar px-4 pb-28 pt-4 safe-top">
@@ -82,6 +110,66 @@ export function SettingsScreen({ notificationsEnabled, onToggleNotifications }: 
             />
           }
         />
+        <Card>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-guard-50 text-guard-700 dark:bg-guard-900/60 dark:text-guard-200">
+              <BellRing className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-black text-slate-950 dark:text-white">
+                {t("phonePush")}
+              </h2>
+              <p className="mt-1 text-sm font-semibold leading-5 text-slate-500 dark:text-slate-300">
+                {t("phonePushDesc")}
+              </p>
+            </div>
+          </div>
+
+          {!pushSupported ? (
+            <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold leading-6 text-slate-600 dark:bg-white/5 dark:text-slate-300">
+              {pushNeedsInstall ? t("phonePushIosHint") : t("phonePushUnsupported")}
+            </p>
+          ) : pushPermission === "denied" ? (
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold leading-6 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              {t("phonePushBlocked")}
+            </p>
+          ) : pushSubscribed ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-2xl bg-guard-50 px-4 py-3 text-sm font-black text-guard-800 dark:bg-guard-900/50 dark:text-guard-100">
+                <Check className="h-5 w-5" />
+                {t("phonePushEnabled")}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleTest}
+                  disabled={pushBusy}
+                  className="min-h-12 rounded-2xl bg-slate-900 text-sm font-black text-white transition active:scale-[0.98] disabled:opacity-50 dark:bg-white/10"
+                >
+                  {testSent ? t("phonePushTestSent") : t("phonePushTest")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDisablePush}
+                  disabled={pushBusy}
+                  className="min-h-12 rounded-2xl border border-slate-200 text-sm font-black text-slate-600 transition active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:text-slate-300"
+                >
+                  {t("phonePushTurnOff")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onEnablePush}
+              disabled={pushBusy}
+              className="min-h-12 w-full rounded-2xl bg-guard-600 text-sm font-black text-white transition active:scale-[0.98] hover:bg-guard-700 disabled:opacity-50"
+            >
+              {t("phonePushEnable")}
+            </button>
+          )}
+        </Card>
+
         <SettingRow
           icon={<Server className="h-6 w-6" />}
           title={t("apiStatus")}
