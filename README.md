@@ -58,11 +58,15 @@ This app needs a free **Groq API key** to read product labels.
 Quick version — create a `.env.local` file in the project root:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=/api
 GROQ_API_KEY=gsk_your_key_here
 ```
 
 `.env.local` is gitignored, so your key is never uploaded to GitHub.
+
+On **Vercel**, you don't run a separate backend — the scan API is part of this
+app. Just add `GROQ_API_KEY` under Settings → Environment Variables and redeploy.
+See [API_KEY_SETUP.md](./API_KEY_SETUP.md) for the full Vercel walkthrough.
 
 ## API
 

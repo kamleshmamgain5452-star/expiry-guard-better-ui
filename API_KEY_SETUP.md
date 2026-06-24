@@ -45,9 +45,13 @@ the app provides their own key. It takes about 2 minutes to set up.
 4. Replace the placeholder with your real key:
 
    ```bash
-   NEXT_PUBLIC_API_URL=http://localhost:8000
+   NEXT_PUBLIC_API_URL=/api
    GROQ_API_KEY=gsk_paste_your_real_key_here
    ```
+
+   > Leave `NEXT_PUBLIC_API_URL` as `/api`. The scan API runs inside this
+   > Next.js app, so this relative path works on localhost and on Vercel
+   > with no changes.
 
 5. Save the file.
 
@@ -78,15 +82,23 @@ The scanner will now use your Groq key to read labels.
 
 ## Deploying online (Vercel)
 
-If you deploy this app to **Vercel**, don't upload the `.env.local` file.
-Instead add the key in the Vercel dashboard:
+The whole app — frontend **and** the scan API — runs together on Vercel.
+You do **not** need a separate backend server or any URL setup. The only
+thing Vercel needs from you is your Groq key.
 
-1. Open your project on **https://vercel.com**
-2. Go to **Settings → Environment Variables**
-3. Add a new variable:
+1. Push your code to GitHub (already done if you're reading this).
+2. Go to **https://vercel.com** and click **Add New → Project**.
+3. Import your GitHub repo and click **Deploy**.
+4. After it deploys, go to **Settings → Environment Variables** and add:
    - **Name:** `GROQ_API_KEY`
    - **Value:** your `gsk_...` key
-4. Click **Save** and redeploy.
+   - (Optional) **Name:** `NEXT_PUBLIC_API_URL`  **Value:** `/api`
+5. Go to the **Deployments** tab and click **Redeploy** so the key takes effect.
+
+That's it — your app is live. 🚀
+
+> ❗ Never upload your `.env.local` file. It stays on your computer. Vercel gets
+> the key only through the Environment Variables screen above.
 
 ---
 

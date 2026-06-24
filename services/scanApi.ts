@@ -1,6 +1,9 @@
 import type { Locale, ScanResult } from "@/types/product";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// The scan endpoint lives inside this Next.js app at /api/scan, so a relative
+// path is used by default. This works on localhost, Vercel, and any domain
+// without configuration.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 type ScanPayload = {
   image: Blob;
