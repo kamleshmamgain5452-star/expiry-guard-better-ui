@@ -19,13 +19,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
     }
 
+    // Bound the stored payload: cap the number of products and truncate names so
+    // an oversized (or malicious) body can't exceed Redis value limits.
+    const MAX_PRODUCTS = 500;
+    const MAX_NAME_LEN = 120;
     const cleanProducts: StoredProduct[] = Array.isArray(products)
       ? products
           .filter((p) => p && typeof p.id === "string")
+          .slice(0, MAX_PRODUCTS)
           .map((p) => ({
-            id: String(p.id),
-            name: typeof p.name === "string" ? p.name : "",
-            expiryDate: p.expiryDate ?? null
+            id: String(p.id).slice(0, 80),
+            name: typeof p.name === "string" ? p.name.slice(0, MAX_NAME_LEN) : "",
+            expiryDate:
+              typeof p.expiryDate === "string" ? p.expiryDate.slice(0, 40) : null
           }))
       : [];
 

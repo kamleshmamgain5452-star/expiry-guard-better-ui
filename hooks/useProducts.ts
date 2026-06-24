@@ -30,7 +30,18 @@ export function useProducts() {
 
   useEffect(() => {
     if (!hydratedRef.current) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    } catch {
+      // localStorage quota exceeded (large base64 images add up). Retry without
+      // images so the inventory itself still persists rather than losing data.
+      try {
+        const lean = products.map(({ imageDataUrl, ...rest }) => rest);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lean));
+      } catch {
+        /* give up silently — data stays in memory for this session */
+      }
+    }
   }, [products]);
 
   // Real-time sync across tabs/windows: when another tab writes products,

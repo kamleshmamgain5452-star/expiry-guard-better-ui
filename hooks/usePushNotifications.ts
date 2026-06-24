@@ -107,7 +107,7 @@ export function usePushNotifications() {
 
   const register = useCallback(
     async (subscriptionJson: unknown, products: Product[], lang: Locale) => {
-      await fetch("/api/push/register", {
+      const res = await fetch("/api/push/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -117,6 +117,9 @@ export function usePushNotifications() {
           lang
         })
       });
+      if (!res.ok) {
+        throw new Error(`register failed: ${res.status}`);
+      }
     },
     []
   );

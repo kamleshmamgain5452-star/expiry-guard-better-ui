@@ -35,6 +35,12 @@ export function parseProductDate(value?: string | null): Date | null {
   // --- OCR error correction pre-pass ---
   trimmed = fixOcrErrors(trimmed);
 
+  // 0. ISO: YYYY-MM-DD (what <input type="date"> and formatDateForInput emit)
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    return validDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  }
+
   // 1. Full numeric: DD/MM/YYYY, DD-MM-YYYY
   const numeric = trimmed.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})$/);
   if (numeric) {
@@ -200,10 +206,12 @@ export function validateAndCorrectDates(
 }
 
 export function daysUntil(value?: string | null): number | null {
-  const date = parseProductDate(value);
-  if (!date) return null;
+  const parsed = parseProductDate(value);
+  if (!parsed) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  // Clone before mutating so we never corrupt the Date returned by parseProductDate.
+  const date = new Date(parsed.getTime());
   date.setHours(0, 0, 0, 0);
   return Math.ceil((date.getTime() - today.getTime()) / 86400000);
 }

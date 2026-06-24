@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertsScreen } from "@/components/AlertsScreen";
 import { BottomNav, BottomTab } from "@/components/BottomNav";
@@ -49,8 +49,21 @@ export function ExpiryGuardApp() {
   const push = usePushNotifications();
 
   // Keep the server's copy of products current so push reminders stay accurate.
+  // Debounced + de-duplicated: rapid edits collapse into one write, and we skip
+  // the network round-trip entirely when the synced payload hasn't changed.
+  const lastSyncRef = useRef<string>("");
   useEffect(() => {
-    push.syncProducts(products, locale);
+    if (!push.subscribed) return;
+    const fingerprint = JSON.stringify({
+      locale,
+      items: products.map((p) => `${p.id}:${p.productName}:${p.expiryDate}`)
+    });
+    if (fingerprint === lastSyncRef.current) return;
+    const timer = window.setTimeout(() => {
+      lastSyncRef.current = fingerprint;
+      push.syncProducts(products, locale);
+    }, 1500);
+    return () => window.clearTimeout(timer);
   }, [products, locale, push.subscribed]); // eslint-disable-line react-hooks/exhaustive-deps
   const [screen, setScreen] = useState<Screen>("splash");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -94,7 +107,7 @@ export function ExpiryGuardApp() {
     });
   }, []);
 
-  const currentAlertSignature = alertSignature(products);
+  const currentAlertSignature = useMemo(() => alertSignature(products), [products]);
   // Hide the banner once its exact situation has been viewed; show it again when it changes.
   const alertViewed = currentAlertSignature !== null && currentAlertSignature === ackAlertSignature;
 
@@ -154,7 +167,7 @@ export function ExpiryGuardApp() {
   return (
     <div className="flex min-h-dvh w-full items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-guard-50/20 p-0 dark:from-slate-950 dark:via-slate-900 dark:to-guard-950/10 sm:p-6 md:p-8">
       {/* Premium device frame mockup */}
-      <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-[#f6faf8] dark:bg-[#101714] shadow-none sm:h-[840px] sm:rounded-[40px] sm:border sm:border-slate-200/80 sm:shadow-2xl dark:sm:border-white/5">
+      <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-[#f6faf8] dark:bg-[#101714] shadow-none sm:h-[min(840px,100dvh)] sm:rounded-[40px] sm:border sm:border-slate-200/80 sm:shadow-2xl dark:sm:border-white/5">
         
         {/* Dynamic Island / Notch for desktop mockup */}
         <div className="hidden sm:block absolute top-3 left-1/2 -translate-x-1/2 w-28 h-6 bg-slate-900 rounded-full z-50 shadow-inner">

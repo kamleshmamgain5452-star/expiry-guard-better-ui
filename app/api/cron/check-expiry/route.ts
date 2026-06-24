@@ -57,34 +57,52 @@ export async function GET(req: NextRequest) {
     let skipped = 0;
     let pruned = 0;
 
-    for (const id of ids) {
-      const record = (await redis.get(deviceKey(id))) as DeviceRecord | null;
-      if (!record || !record.subscription) {
-        await redis.srem(DEVICES_SET, id);
-        pruned++;
-        continue;
-      }
+    // Fetch all device records in one round-trip instead of one GET per device.
+    const records =
+      ids.length > 0
+        ? ((await redis.mget(...ids.map(deviceKey))) as (DeviceRecord | null)[])
+        : [];
 
-      const message = buildMessage(record.products ?? [], record.lang);
-      if (!message) {
-        skipped++;
-        continue;
-      }
+    // Process devices in bounded-concurrency waves so N devices don't serialize
+    // into N sequential push round-trips (which would blow the function timeout).
+    const CONCURRENCY = 25;
+    for (let start = 0; start < ids.length; start += CONCURRENCY) {
+      const slice = ids.slice(start, start + CONCURRENCY);
+      const results = await Promise.allSettled(
+        slice.map(async (id, i) => {
+          const record = records[start + i];
+          if (!record || !record.subscription) {
+            await redis.srem(DEVICES_SET, id);
+            return "pruned" as const;
+          }
 
-      try {
-        await wp.sendNotification(
-          record.subscription,
-          JSON.stringify({ ...message, url: "/", tag: "expiry-daily" })
-        );
-        sent++;
-      } catch (err) {
-        const status = (err as { statusCode?: number })?.statusCode;
-        // 404/410 mean the subscription is gone — remove it.
-        if (status === 404 || status === 410) {
-          await redis.del(deviceKey(id));
-          await redis.srem(DEVICES_SET, id);
-          pruned++;
-        }
+          const message = buildMessage(record.products ?? [], record.lang);
+          if (!message) return "skipped" as const;
+
+          try {
+            await wp.sendNotification(
+              record.subscription,
+              JSON.stringify({ ...message, url: "/", tag: "expiry-daily" })
+            );
+            return "sent" as const;
+          } catch (err) {
+            const status = (err as { statusCode?: number })?.statusCode;
+            // 404/410 mean the subscription is gone — remove it.
+            if (status === 404 || status === 410) {
+              await redis.del(deviceKey(id));
+              await redis.srem(DEVICES_SET, id);
+              return "pruned" as const;
+            }
+            return "failed" as const;
+          }
+        })
+      );
+
+      for (const r of results) {
+        if (r.status !== "fulfilled") continue;
+        if (r.value === "sent") sent++;
+        else if (r.value === "skipped") skipped++;
+        else if (r.value === "pruned") pruned++;
       }
     }
 
