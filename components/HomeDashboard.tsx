@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Bell, CalendarClock, ChevronRight, Languages, PackageCheck, ScanLine, X } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight, FlaskConical, Languages, PackageCheck, ScanLine, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -18,6 +18,8 @@ type HomeDashboardProps = {
   };
   onScan: () => void;
   onManualAdd: () => void;
+  onPurityTest?: () => void;
+  onOpenPurityHistory?: () => void;
   onOpenProduct: (product: Product) => void;
   onOpenAlerts: () => void;
   onViewAlerts?: () => void;
@@ -32,6 +34,8 @@ export function HomeDashboard({
   summary,
   onScan,
   onManualAdd,
+  onPurityTest,
+  onOpenPurityHistory,
   onOpenProduct,
   onOpenAlerts,
   onViewAlerts,
@@ -203,6 +207,45 @@ export function HomeDashboard({
           </button>
         </div>
       </section>
+
+      {onPurityTest && (
+        <button
+          type="button"
+          onClick={onPurityTest}
+          className="mt-4 flex w-full items-center gap-4 rounded-[28px] border border-guard-200/70 bg-guard-50/70 p-4 text-left transition active:scale-[0.99] dark:border-guard-900/50 dark:bg-guard-900/20"
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-guard-500 text-white">
+            <FlaskConical className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-black text-slate-950 dark:text-white">
+              {t("purityTitle")}
+            </span>
+            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-300">
+              {t("purityHomeHint")}
+            </span>
+          </span>
+          {onOpenPurityHistory && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenPurityHistory();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  onOpenPurityHistory();
+                }
+              }}
+              className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-black text-guard-700 dark:bg-white/10 dark:text-guard-200"
+            >
+              {t("purityHistoryShort")}
+            </span>
+          )}
+        </button>
+      )}
 
       <AnimatePresence mode="popLayout">
         {notificationsEnabled && (

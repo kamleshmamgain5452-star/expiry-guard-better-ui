@@ -1,4 +1,4 @@
-import { ArrowLeft, Barcode, CalendarDays, Check, Folder, Layers, Package, Trash2 } from "lucide-react";
+import { ArrowLeft, Barcode, CalendarDays, Check, Folder, Layers, Package, Trash2, FlaskConical, CheckCircle2, AlertTriangle, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { Button } from "@/components/Button";
@@ -6,7 +6,7 @@ import { Card } from "@/components/Card";
 import { FreshnessRing } from "@/components/FreshnessRing";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useI18n } from "@/hooks/useI18n";
-import type { Product } from "@/types/product";
+import type { Product, PurityTest, PurityVerdict } from "@/types/product";
 import { daysUntil, freshnessPercent, upcomingWeekday } from "@/utils/dates";
 
 type ProductDetailScreenProps = {
@@ -14,9 +14,23 @@ type ProductDetailScreenProps = {
   onBack: () => void;
   onMarkUsed?: () => void;
   onDelete?: () => void;
+  onRunPurityTest?: () => void;
+  purityTest?: PurityTest | null;
 };
 
-export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete }: ProductDetailScreenProps) {
+const PURITY_ICON: Record<PurityVerdict, typeof CheckCircle2> = {
+  pure: CheckCircle2,
+  adulterated: AlertTriangle,
+  inconclusive: HelpCircle
+};
+
+const PURITY_TONE: Record<PurityVerdict, string> = {
+  pure: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
+  adulterated: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200",
+  inconclusive: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+};
+
+export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete, onRunPurityTest, purityTest }: ProductDetailScreenProps) {
   const { t, locale } = useI18n();
   const days = daysUntil(product.expiryDate);
   const freshness = freshnessPercent(product.expiryDate);
@@ -149,6 +163,47 @@ export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete }: P
             {product.confidence > 0.75 ? t("highConfidence") : t("lowConfidence")}
           </div>
         </Card>
+
+        {onRunPurityTest && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-guard-50 text-guard-700 dark:bg-guard-900/60 dark:text-guard-200">
+                  <FlaskConical className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-500 dark:text-slate-300">
+                    {t("purityTitle")}
+                  </p>
+                  {purityTest ? (
+                    (() => {
+                      const Icon = PURITY_ICON[purityTest.verdict];
+                      return (
+                        <span
+                          className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black ${PURITY_TONE[purityTest.verdict]}`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {t(`verdict_${purityTest.verdict}` as "verdict_pure")}
+                        </span>
+                      );
+                    })()
+                  ) : (
+                    <p className="truncate text-base font-black text-slate-950 dark:text-white">
+                      {t("purityNotTested")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onRunPurityTest}
+                className="shrink-0 rounded-xl bg-guard-600 px-3 py-2 text-xs font-black text-white transition active:scale-95 hover:bg-guard-700"
+              >
+                {purityTest ? t("purityRetest") : t("purityRunTest")}
+              </button>
+            </div>
+          </Card>
+        )}
       </section>
 
       {(onMarkUsed || onDelete) && (

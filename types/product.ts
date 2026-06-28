@@ -32,3 +32,30 @@ export type Product = {
   category?: string;
   notes?: string;
 };
+
+// --- Iodine / starch purity test ---
+export type IodineFood = "milk" | "ghee" | "other";
+export type PurityVerdict = "pure" | "adulterated" | "inconclusive";
+export type IodineIntensity = "none" | "trace" | "moderate" | "high";
+
+// Result returned by the /api/iodine vision endpoint.
+export type IodineApiResult = {
+  starchPresent: boolean;
+  intensity: IodineIntensity;
+  colorHex: string;
+  colorName: string;
+  verdict: PurityVerdict;
+  confidence: number; // 0..1
+  note: string;
+};
+
+// A saved purity test, optionally linked to a product in the inventory.
+export type PurityTest = IodineApiResult & {
+  id: string;
+  food: IodineFood;
+  imageDataUrl?: string;
+  productId?: string | null;
+  productName?: string | null;
+  source: "ai" | "device"; // whether AI confirmed or the on-device color decided
+  createdAt: string;
+};

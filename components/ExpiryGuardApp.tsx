@@ -11,11 +11,15 @@ import { ManualAddScreen } from "@/components/ManualAddScreen";
 import { SettingsScreen } from "@/components/SettingsScreen";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ProductsScreen } from "@/components/ProductsScreen";
+import { PurityTestScreen } from "@/components/PurityTestScreen";
+import { PurityResultScreen } from "@/components/PurityResultScreen";
+import { PurityHistoryScreen } from "@/components/PurityHistoryScreen";
 import { useI18n } from "@/hooks/useI18n";
 import { useProducts } from "@/hooks/useProducts";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { usePurityTests } from "@/hooks/usePurityTests";
 import { daysUntil } from "@/utils/dates";
-import type { Product, ScanResult } from "@/types/product";
+import type { IodineApiResult, IodineFood, Product, PurityTest, ScanResult } from "@/types/product";
 
 const ACK_KEY = "expiryguard_ack_alert";
 
@@ -41,12 +45,16 @@ type Screen =
   | "detail"
   | "alerts"
   | "products"
-  | "settings";
+  | "settings"
+  | "purity_test"
+  | "purity_result"
+  | "purity_history";
 
 export function ExpiryGuardApp() {
   const { t, locale } = useI18n();
   const { products, summary, addProduct, updateProduct, deleteProduct, restoreProduct } = useProducts();
   const push = usePushNotifications();
+  const purity = usePurityTests();
 
   // Keep the server's copy of products current so push reminders stay accurate.
   // Debounced + de-duplicated: rapid edits collapse into one write, and we skip
@@ -73,6 +81,44 @@ export function ExpiryGuardApp() {
   const [pendingImage, setPendingImage] = useState<string | undefined>();
   const [undoToast, setUndoToast] = useState<{ product: Product; mode: "deleted" | "used" } | null>(null);
   const undoTimerRef = useRef<number | null>(null);
+
+  // Purity (iodine) test flow state.
+  const [pendingPurity, setPendingPurity] = useState<{
+    result: IodineApiResult;
+    food: IodineFood;
+    imageDataUrl: string;
+    source: "ai" | "device";
+  } | null>(null);
+  const [purityCtx, setPurityCtx] = useState<{ productId: string | null; productName: string | null }>({
+    productId: null,
+    productName: null
+  });
+
+  const startPurityTest = (productId: string | null = null, productName: string | null = null) => {
+    setPurityCtx({ productId, productName });
+    setPendingPurity(null);
+    setScreen("purity_test");
+  };
+
+  const savePurityTest = () => {
+    if (!pendingPurity) return;
+    const test: PurityTest = {
+      ...pendingPurity.result,
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2) + Date.now().toString(36),
+      food: pendingPurity.food,
+      imageDataUrl: pendingPurity.imageDataUrl,
+      productId: purityCtx.productId,
+      productName: purityCtx.productName,
+      source: pendingPurity.source,
+      createdAt: new Date().toISOString()
+    };
+    purity.addTest(test);
+    setPendingPurity(null);
+    setScreen("purity_history");
+  };
 
   // Remove a product but keep it recoverable for 5s via the Undo toast.
   const removeWithUndo = (id: string, mode: "deleted" | "used") => {
@@ -195,6 +241,8 @@ export function ExpiryGuardApp() {
                   notificationsEnabled={notificationsEnabled}
                   onScan={() => setScreen("scanner")}
                   onManualAdd={() => setScreen("manual_add")}
+                  onPurityTest={() => startPurityTest()}
+                  onOpenPurityHistory={() => setScreen("purity_history")}
                   onOpenAlerts={() => setScreen("alerts")}
                   alertViewed={alertViewed}
                   onViewAlerts={() => {
@@ -293,6 +341,10 @@ export function ExpiryGuardApp() {
               {screen === "detail" && selectedProduct && (
                 <ProductDetailScreen
                   product={selectedProduct}
+                  purityTest={purity.latestForProduct.get(selectedProduct.id) || null}
+                  onRunPurityTest={() =>
+                    startPurityTest(selectedProduct.id, selectedProduct.productName)
+                  }
                   onBack={() => setScreen(activeTab)}
                   onMarkUsed={() => {
                     removeWithUndo(selectedProduct.id, "used");
@@ -325,6 +377,41 @@ export function ExpiryGuardApp() {
                   onEnablePush={() => push.subscribe(products, locale)}
                   onDisablePush={push.unsubscribe}
                   onTestPush={push.sendTest}
+                />
+              )}
+              {screen === "purity_test" && (
+                <PurityTestScreen
+                  productName={purityCtx.productName}
+                  onBack={() =>
+                    setScreen(purityCtx.productId ? "detail" : "home")
+                  }
+                  onComplete={(result, food, imageDataUrl, source) => {
+                    setPendingPurity({ result, food, imageDataUrl, source });
+                    setScreen("purity_result");
+                  }}
+                />
+              )}
+              {screen === "purity_result" && pendingPurity && (
+                <PurityResultScreen
+                  result={pendingPurity.result}
+                  food={pendingPurity.food}
+                  imageDataUrl={pendingPurity.imageDataUrl}
+                  source={pendingPurity.source}
+                  productName={purityCtx.productName}
+                  onBack={() => setScreen("purity_test")}
+                  onSave={savePurityTest}
+                  onRetest={() => {
+                    setPendingPurity(null);
+                    setScreen("purity_test");
+                  }}
+                />
+              )}
+              {screen === "purity_history" && (
+                <PurityHistoryScreen
+                  tests={purity.tests}
+                  onBack={() => setScreen("home")}
+                  onDelete={purity.deleteTest}
+                  onNewTest={() => startPurityTest()}
                 />
               )}
             </motion.div>

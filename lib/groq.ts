@@ -39,3 +39,45 @@ export async function nextKeyIndex(count: number): Promise<number> {
     return Math.floor(Math.random() * count);
   }
 }
+
+export const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+// Send a chat/vision request to Groq, rotating across keys and failing over to
+// the next key on rate-limit/auth/server errors. Returns the message content.
+export async function groqChat(payload: object): Promise<string> {
+  const keys = getGroqKeys();
+  if (keys.length === 0) throw new Error("GROQ_API_KEY is not set.");
+
+  const start = await nextKeyIndex(keys.length);
+  let lastStatus = 0;
+  let lastError = "";
+
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const idx = (start + attempt) % keys.length;
+    const res = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${keys[idx]}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || "";
+    }
+
+    lastStatus = res.status;
+    lastError = await res.text();
+    const retryable =
+      res.status === 429 ||
+      res.status === 401 ||
+      res.status === 403 ||
+      res.status >= 500;
+    if (!retryable) break;
+  }
+
+  throw new Error(`Groq request failed: ${lastStatus} ${lastError.slice(0, 200)}`);
+}
