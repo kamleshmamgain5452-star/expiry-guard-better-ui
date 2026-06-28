@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { parseOcrResult } from "@/utils/ocrParser";
+import { getGroqKeys, nextKeyIndex } from "@/lib/groq";
 
 export const dynamic = "force-dynamic";
 
@@ -71,8 +72,8 @@ export async function POST(req: NextRequest) {
 
     // 2. Call Groq Vision API
     const base64Image = jpegBuffer.toString("base64");
-    const apiKey = (process.env.GROQ_API_KEY || "").trim();
-    if (!apiKey) {
+    const groqKeys = getGroqKeys();
+    if (groqKeys.length === 0) {
       return NextResponse.json(
         { error: "GROQ_API_KEY is not set." },
         { status: 500 }
@@ -106,20 +107,50 @@ export async function POST(req: NextRequest) {
       max_tokens: 1024,
     };
 
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify(payload),
-    });
+    // Rotate across all keys and fail over to the next one on rate-limit (429),
+    // auth (401/403) or server (5xx) errors, so a scan succeeds as long as any
+    // key has capacity. Other errors (e.g. 400) stop early — a key swap won't help.
+    const start = await nextKeyIndex(groqKeys.length);
+    let response: Response | null = null;
+    let lastStatus = 0;
+    let lastError = "";
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Groq API error:", errorText);
-      return NextResponse.json({ error: `Groq OCR failed: Status ${response.status}` }, { status: 503 });
+    for (let attempt = 0; attempt < groqKeys.length; attempt++) {
+      const keyIndex = (start + attempt) % groqKeys.length;
+      const res = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${groqKeys[keyIndex]}`,
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        response = res;
+        break;
+      }
+
+      lastStatus = res.status;
+      lastError = await res.text();
+      const retryable =
+        res.status === 429 ||
+        res.status === 401 ||
+        res.status === 403 ||
+        res.status >= 500;
+      console.warn(
+        `Groq key #${keyIndex} failed (status ${res.status})${retryable ? ", trying next key…" : ""}`
+      );
+      if (!retryable) break;
+    }
+
+    if (!response) {
+      console.error("Groq API error (all keys exhausted):", lastStatus, lastError);
+      return NextResponse.json(
+        { error: `Groq OCR failed: Status ${lastStatus}` },
+        { status: 503 }
+      );
     }
 
     const responseData = await response.json();
