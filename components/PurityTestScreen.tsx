@@ -319,11 +319,12 @@ export function PurityTestScreen({
           </Button>
         </div>
 
+        {/* No `capture` attribute → opens the photo gallery / file picker so the
+            user can upload an existing test image (camera capture is the button on the left). */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={handleFile}
           className="hidden"
         />

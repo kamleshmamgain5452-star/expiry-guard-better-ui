@@ -45,11 +45,13 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Send a chat/vision request to Groq, rotating across keys and failing over to
 // the next key on rate-limit/auth/server errors. Returns the message content.
+// Uses a stateless RANDOM start (no Redis) so callers like the purity test never
+// consume backend/Upstash commands — keys still spread out and fail over.
 export async function groqChat(payload: object): Promise<string> {
   const keys = getGroqKeys();
   if (keys.length === 0) throw new Error("GROQ_API_KEY is not set.");
 
-  const start = await nextKeyIndex(keys.length);
+  const start = keys.length > 1 ? Math.floor(Math.random() * keys.length) : 0;
   let lastStatus = 0;
   let lastError = "";
 
