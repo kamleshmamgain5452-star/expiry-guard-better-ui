@@ -3,7 +3,7 @@ import type { Locale, ScanResult } from "@/types/product";
 // The scan endpoint lives inside this Next.js app at /api/scan, so a relative
 // path is used by default. This works on localhost, Vercel, and any domain
 // without configuration.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
 
 type ScanPayload = {
   image: Blob;
@@ -30,8 +30,14 @@ export async function scanProductLabel({
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Scan failed");
+    let message = "Scan failed. Please try again.";
+    try {
+      const payload = (await response.json()) as { error?: string; detail?: string };
+      message = payload.error || payload.detail || message;
+    } catch {
+      // Keep the friendly fallback when a proxy returns an HTML error page.
+    }
+    throw new Error(message);
   }
 
   return response.json() as Promise<ScanResult>;

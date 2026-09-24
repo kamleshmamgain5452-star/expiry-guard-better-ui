@@ -1,4 +1,4 @@
-import { Info, Languages, Moon, Server, ShieldCheck, Smartphone, Bell, BellRing, Check } from "lucide-react";
+import { Info, Languages, Moon, Server, ShieldCheck, Smartphone, Bell, BellRing, Check, ShieldAlert, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Card } from "@/components/Card";
@@ -18,6 +18,8 @@ type SettingsScreenProps = {
   onEnablePush: () => Promise<{ ok: boolean; reason?: string }>;
   onDisablePush: () => Promise<void>;
   onTestPush: () => Promise<boolean>;
+  allergens: string[];
+  onUpdateAllergens: (allergens: string[]) => void;
 };
 
 export function SettingsScreen({
@@ -30,11 +32,26 @@ export function SettingsScreen({
   pushPermission,
   onEnablePush,
   onDisablePush,
-  onTestPush
+  onTestPush,
+  allergens,
+  onUpdateAllergens
 }: SettingsScreenProps) {
   const { t, locale, setLocale } = useI18n();
   const { darkMode, setDarkMode } = useTheme();
   const [testSent, setTestSent] = useState(false);
+  const [newAllergy, setNewAllergy] = useState("");
+
+  const handleAddAllergy = () => {
+    const trimmed = newAllergy.trim();
+    if (trimmed && !allergens.includes(trimmed)) {
+      onUpdateAllergens([...allergens, trimmed]);
+      setNewAllergy("");
+    }
+  };
+
+  const handleRemoveAllergy = (allergy: string) => {
+    onUpdateAllergens(allergens.filter((a) => a !== allergy));
+  };
 
   const handleTest = async () => {
     const ok = await onTestPush();
@@ -167,6 +184,65 @@ export function SettingsScreen({
             >
               {t("phonePushEnable")}
             </button>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-black text-slate-950 dark:text-white">
+                {t("allergies" as any)}
+              </h2>
+              <p className="mt-1 text-sm font-semibold leading-5 text-slate-500 dark:text-slate-300">
+                {t("allergiesSubtitle" as any)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              placeholder={t("allergyPlaceholder" as any)}
+              value={newAllergy}
+              onChange={(e) => setNewAllergy(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddAllergy();
+                }
+              }}
+              className="flex-1 min-h-11 px-3.5 rounded-2xl border border-slate-200 bg-white text-sm font-semibold outline-none focus:border-guard-500 dark:border-white/10 dark:bg-white/5 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={handleAddAllergy}
+              className="px-4 rounded-2xl bg-guard-600 text-sm font-black text-white transition hover:bg-guard-700 active:scale-[0.98]"
+            >
+              {t("addAllergy" as any)}
+            </button>
+          </div>
+
+          {allergens.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {allergens.map((allergy) => (
+                <span
+                  key={allergy}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-100 pl-3.5 pr-2.5 py-1.5 text-xs font-black text-red-700 dark:bg-red-950/40 dark:border-red-900/40 dark:text-red-200"
+                >
+                  {allergy}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAllergy(allergy)}
+                    className="grid h-5 w-5 place-items-center rounded-full hover:bg-red-100 dark:hover:bg-red-900/60"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
         </Card>
 

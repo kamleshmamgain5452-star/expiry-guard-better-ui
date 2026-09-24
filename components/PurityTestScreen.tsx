@@ -1,11 +1,10 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Droplets, ImagePlus, Lightbulb, Milk, FlaskConical, Soup } from "lucide-react";
+import { ArrowLeft, Droplets, ImagePlus, Lightbulb, Milk, FlaskConical } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useI18n } from "@/hooks/useI18n";
 import { analyzeIodineTest } from "@/services/iodineApi";
-import { classifyIodineColor, sampleCenterColor } from "@/utils/iodineColor";
 import type { IodineApiResult, IodineFood } from "@/types/product";
 
 type PurityTestScreenProps = {
@@ -23,8 +22,7 @@ type PurityTestScreenProps = {
 type Step = "pick" | "capture";
 
 const FOODS: { id: IodineFood; icon: typeof Milk }[] = [
-  { id: "milk", icon: Milk },
-  { id: "ghee", icon: Soup },
+  { id: "dairy", icon: Milk },
   { id: "other", icon: FlaskConical }
 ];
 
@@ -36,7 +34,7 @@ export function PurityTestScreen({
 }: PurityTestScreenProps) {
   const { t } = useI18n();
   const [step, setStep] = useState<Step>(presetFood ? "capture" : "pick");
-  const [food, setFood] = useState<IodineFood>(presetFood || "milk");
+  const [food, setFood] = useState<IodineFood>(presetFood || "dairy");
   const [cameraReady, setCameraReady] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,18 +107,6 @@ export function PurityTestScreen({
     setAnalyzing(true);
     setError(null);
     try {
-      // 1. On-device colour read (instant).
-      const rgb = sampleCenterColor(canvas);
-      const device = rgb ? classifyIodineColor(rgb) : null;
-
-      // 2. Hybrid: trust a clearly-amber / clearly-blue-black read; otherwise
-      //    confirm with the vision API.
-      if (device && device.clear) {
-        const { clear, ...result } = device;
-        onComplete(result, food, imageDataUrl, "device");
-        return;
-      }
-
       const blob = await new Promise<Blob>((resolve, reject) =>
         canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error("capture failed"))),
@@ -149,13 +135,25 @@ export function PurityTestScreen({
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    if (!file.type.startsWith("image/")) {
+      setError(t("purityImageOnly" as any));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError(t("purityImageTooLarge" as any));
+      return;
+    }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       analyzeFromSource(img, img.naturalWidth, img.naturalHeight);
       URL.revokeObjectURL(url);
     };
-    img.onerror = () => setError(t("scanFailed"));
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setError(t("scanFailed"));
+    };
     img.src = url;
   }
 
@@ -182,7 +180,7 @@ export function PurityTestScreen({
           </div>
         </header>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {FOODS.map(({ id, icon: Icon }) => {
             const active = food === id;
             return (
@@ -207,7 +205,7 @@ export function PurityTestScreen({
                   <Icon className="h-6 w-6" />
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-white">
-                  {t(`food_${id}` as "food_milk")}
+                  {t(`food_${id}` as "food_dairy")}
                 </span>
               </button>
             );
@@ -228,7 +226,7 @@ export function PurityTestScreen({
                   {i + 1}
                 </span>
                 <span className="text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
-                  {t(k)}
+                  {t(`${k}_${food}` as any)}
                 </span>
               </li>
             ))}
@@ -236,7 +234,7 @@ export function PurityTestScreen({
         </Card>
 
         <p className="mt-4 px-1 text-xs font-semibold leading-5 text-slate-400 dark:text-slate-500">
-          {t("purityDisclaimer")}
+          {t(food === "other" ? "phDisclaimer" as any : "purityDisclaimer")}
         </p>
 
         <Button className="mt-5 w-full" size="lg" onClick={() => setStep("capture")}>
@@ -268,7 +266,7 @@ export function PurityTestScreen({
             <ArrowLeft className="h-5 w-5" />
           </button>
           <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-black backdrop-blur">
-            {productName ? productName : t(`food_${food}` as "food_milk")}
+            {productName ? productName : t(`food_${food}` as "food_dairy")}
           </span>
           <span className="h-11 w-11" />
         </header>
@@ -290,7 +288,11 @@ export function PurityTestScreen({
         </div>
 
         {error && (
-          <div className="mb-3 rounded-2xl bg-red-500/20 p-3 text-xs font-bold text-red-50 backdrop-blur">
+          <div
+            className="mb-3 rounded-2xl bg-red-500/20 p-3 text-xs font-bold text-red-50 backdrop-blur"
+            role="alert"
+            aria-live="polite"
+          >
             {error}
           </div>
         )}

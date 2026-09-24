@@ -12,7 +12,7 @@ from backend.models.scan import OCRText
 
 logger = logging.getLogger(__name__)
 
-GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_MODEL = os.environ.get("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def _get_groq_key() -> str:
@@ -95,6 +95,7 @@ def run_ocr(image: np.ndarray, locale: str = "en") -> OCRText:
         ],
         "temperature": 0.1,
         "max_tokens": 1024,
+        "reasoning_effort": "none",
     }
 
     headers = {

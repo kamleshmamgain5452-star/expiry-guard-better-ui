@@ -209,42 +209,34 @@ export function HomeDashboard({
       </section>
 
       {onPurityTest && (
-        <button
-          type="button"
-          onClick={onPurityTest}
-          className="mt-4 flex w-full items-center gap-4 rounded-[28px] border border-guard-200/70 bg-guard-50/70 p-4 text-left transition active:scale-[0.99] dark:border-guard-900/50 dark:bg-guard-900/20"
-        >
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-guard-500 text-white">
-            <FlaskConical className="h-6 w-6" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-base font-black text-slate-950 dark:text-white">
-              {t("purityTitle")}
+        <div className="mt-4 flex w-full items-center gap-2 rounded-[28px] border border-guard-200/70 bg-guard-50/70 p-2 dark:border-guard-900/50 dark:bg-guard-900/20">
+          <button
+            type="button"
+            onClick={onPurityTest}
+            className="flex min-w-0 flex-1 items-center gap-4 rounded-[22px] p-2 text-left transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-guard-500 dark:hover:bg-white/5"
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-guard-500 text-white">
+              <FlaskConical className="h-6 w-6" aria-hidden="true" />
             </span>
-            <span className="block text-xs font-semibold text-slate-500 dark:text-slate-300">
-              {t("purityHomeHint")}
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-black text-slate-950 dark:text-white">
+                {t("purityTitle")}
+              </span>
+              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-300">
+                {t("purityHomeHint")}
+              </span>
             </span>
-          </span>
+          </button>
           {onOpenPurityHistory && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenPurityHistory();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.stopPropagation();
-                  onOpenPurityHistory();
-                }
-              }}
-              className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-black text-guard-700 dark:bg-white/10 dark:text-guard-200"
+            <button
+              type="button"
+              onClick={onOpenPurityHistory}
+              className="min-h-11 rounded-full bg-white/70 px-3 text-[11px] font-black text-guard-700 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-guard-500 dark:bg-white/10 dark:text-guard-200 dark:hover:bg-white/15"
             >
               {t("purityHistoryShort")}
-            </span>
+            </button>
           )}
-        </button>
+        </div>
       )}
 
       <AnimatePresence mode="popLayout">

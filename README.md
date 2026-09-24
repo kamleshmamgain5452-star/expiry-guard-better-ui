@@ -70,7 +70,7 @@ See [API_KEY_SETUP.md](./API_KEY_SETUP.md) for the full Vercel walkthrough.
 
 ## API
 
-`POST /scan`
+`POST /api/scan`
 
 Form data:
 

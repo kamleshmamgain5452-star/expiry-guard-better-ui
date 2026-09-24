@@ -141,15 +141,22 @@ export function ExpiryGuardApp() {
   const [ackAlertSignature, setAckAlertSignature] = useState<string | null>(null);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [allergens, setAllergens] = useState<string[]>([]);
 
-  // Load notifications preference + last-viewed alert signature from localStorage on mount
+  // Load notifications preference + last-viewed alert signature + allergens from localStorage on mount
   useEffect(() => {
     const stored = window.localStorage.getItem("expiryguard_notifications_enabled");
     const ack = window.localStorage.getItem(ACK_KEY);
+    const storedAllergens = window.localStorage.getItem("expiryguard_allergens");
     // Deferred so these don't run as synchronous setState inside the mount effect.
     window.queueMicrotask(() => {
       if (stored !== null) setNotificationsEnabled(stored === "true");
       if (ack !== null) setAckAlertSignature(ack);
+      if (storedAllergens !== null) {
+        try {
+          setAllergens(JSON.parse(storedAllergens));
+        } catch {}
+      }
     });
   }, []);
 
@@ -166,6 +173,11 @@ export function ExpiryGuardApp() {
   const handleToggleNotifications = (enabled: boolean) => {
     setNotificationsEnabled(enabled);
     window.localStorage.setItem("expiryguard_notifications_enabled", enabled ? "true" : "false");
+  };
+
+  const handleUpdateAllergens = (newAllergens: string[]) => {
+    setAllergens(newAllergens);
+    window.localStorage.setItem("expiryguard_allergens", JSON.stringify(newAllergens));
   };
 
   useEffect(() => {
@@ -327,6 +339,7 @@ export function ExpiryGuardApp() {
                 <ScanResultScreen
                   result={pendingResult}
                   imageDataUrl={pendingImage}
+                  allergens={allergens}
                   onBack={() => setScreen("scanner")}
                   onRescan={() => setScreen("scanner")}
                   onConfirm={(result) => {
@@ -341,10 +354,7 @@ export function ExpiryGuardApp() {
               {screen === "detail" && selectedProduct && (
                 <ProductDetailScreen
                   product={selectedProduct}
-                  purityTest={purity.latestForProduct.get(selectedProduct.id) || null}
-                  onRunPurityTest={() =>
-                    startPurityTest(selectedProduct.id, selectedProduct.productName)
-                  }
+                  allergens={allergens}
                   onBack={() => setScreen(activeTab)}
                   onMarkUsed={() => {
                     removeWithUndo(selectedProduct.id, "used");
@@ -377,6 +387,8 @@ export function ExpiryGuardApp() {
                   onEnablePush={() => push.subscribe(products, locale)}
                   onDisablePush={push.unsubscribe}
                   onTestPush={push.sendTest}
+                  allergens={allergens}
+                  onUpdateAllergens={handleUpdateAllergens}
                 />
               )}
               {screen === "purity_test" && (

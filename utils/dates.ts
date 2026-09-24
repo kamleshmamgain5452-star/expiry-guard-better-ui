@@ -1,140 +1,119 @@
 import type { ExpiryStatus } from "@/types/product";
 
-const monthNames: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11
-};
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MON =
+  "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![a-z])";
+const SEP = "\\s*[./-]\\s*";
+const ORD = "(?:st|nd|rd|th)?";
+
+type DateParts = { y: number; m: number; d?: number }; // no day = month-only date
+
+const monthOf = (name: string) => MONTHS.indexOf(name.slice(0, 3).toLowerCase()) + 1;
+const yearOf = (y: string) => (y.length === 2 ? 2000 + Number(y) : Number(y));
+
+// Every date layout printed on packs. Month-only dates resolve to the month's
+// last day. "Weak" layouts are too easy to confuse with prices, weights, or
+// batch codes, so label scanning only trusts them right after an EXP/MFD word.
+const FORMATS: { rx: RegExp; weak?: (g: RegExpMatchArray) => boolean; get: (g: RegExpMatchArray) => DateParts }[] = [
+  // 2027-02-04, 2027/02/04
+  {
+    rx: new RegExp(`(?<!\\d)((?:19|20)\\d{2})${SEP}(\\d{1,2})${SEP}(\\d{1,2})(?!\\d)`, "gi"),
+    get: (g) => ({ y: +g[1], m: +g[2], d: +g[3] })
+  },
+  // 04/02/2027, 04.02.27, 04 - 02 - 2027; month-first (12/31/2026) only when unambiguous
+  {
+    rx: new RegExp(`(?<!\\d)(\\d{1,2})${SEP}(\\d{1,2})${SEP}(\\d{4}|\\d{2})(?!\\d)`, "gi"),
+    get: (g) =>
+      +g[2] > 12 && +g[1] <= 12
+        ? { y: yearOf(g[3]), m: +g[1], d: +g[2] }
+        : { y: yearOf(g[3]), m: +g[2], d: +g[1] }
+  },
+  // 04 Feb 2027, 04-FEB-27, 04FEB27, 5th Feb, 2027
+  {
+    rx: new RegExp(`(?<!\\d)(\\d{1,2})${ORD}[\\s./-]*${MON}[\\s.,/'-]*(\\d{4}|\\d{2})(?!\\d)`, "gi"),
+    get: (g) => ({ y: yearOf(g[3]), m: monthOf(g[2]), d: +g[1] })
+  },
+  // Feb 4, 2027 / FEB 04 2027
+  {
+    rx: new RegExp(`(?<![a-z])${MON}\\.?\\s*(\\d{1,2})${ORD}\\s*,?\\s*(\\d{4})(?!\\d)`, "gi"),
+    get: (g) => ({ y: +g[3], m: monthOf(g[1]), d: +g[2] })
+  },
+  // FEB 2027, Feb-27, FEB'27, FEB27
+  {
+    rx: new RegExp(`(?<![a-z])${MON}[\\s./'-]*(\\d{4}|\\d{2})(?!\\d)`, "gi"),
+    get: (g) => ({ y: yearOf(g[2]), m: monthOf(g[1]) })
+  },
+  // 2027 FEB
+  {
+    rx: new RegExp(`(?<!\\d)((?:19|20)\\d{2})[\\s./-]*${MON}`, "gi"),
+    get: (g) => ({ y: +g[1], m: monthOf(g[2]) })
+  },
+  // 02/2027, 02-27, 12.26 — but not ₹5.00, 1.25 kg, or the tail of 31/02/2027
+  {
+    rx: new RegExp(
+      `(?<!(?:₹|\\brs|\\binr|\\bmrp|\\$)\\.?\\s*)(?<!\\d\\s*[./-]\\s*)(?<!\\d)(\\d{1,2})\\s*([./-])\\s*(\\d{4}|\\d{2})(?!\\d)` +
+        `(?!\\s*(?:[./-]\\s*\\d|%|kg|gm?|mg|ml|l|ltr|kcal|kj|cm|mm)(?![a-z]))`,
+      "gi"
+    ),
+    weak: (g) => g[2] === "." || g[3].length === 2,
+    get: (g) => ({ y: yearOf(g[3]), m: +g[1] })
+  },
+  // Stamped without separators: 040227, 04022027, 20270204
+  {
+    rx: /(?<!\d)(\d{8}|\d{6})(?!\d)/g,
+    weak: () => true,
+    get: ([, s]) => {
+      const ymd = { y: +s.slice(0, 4), m: +s.slice(4, 6), d: +s.slice(6) };
+      if (s.length === 8 && toDate(ymd)) return ymd;
+      return { y: yearOf(s.slice(4)), m: +s.slice(2, 4), d: +s.slice(0, 2) };
+    }
+  }
+];
+
+function toDate({ y, m, d }: DateParts): Date | null {
+  if (y < 1990 || y > 2099 || m < 1 || m > 12) return null;
+  const day = d ?? new Date(y, m, 0).getDate();
+  const date = new Date(y, m - 1, day, 12, 0, 0);
+  return date.getMonth() === m - 1 && date.getDate() === day ? date : null;
+}
+
+export type DateHit = { at: number; end: number; date: Date; weak: boolean };
+
+// All dates in `text`, in reading order. Where layouts overlap the longest
+// match wins, so "04/02/2027" never also yields "04/02" or "02/2027".
+export function findDateHits(text: string): DateHit[] {
+  const fixed = fixOcrErrors(text);
+  const hits: DateHit[] = [];
+  for (const format of FORMATS) {
+    for (const g of fixed.matchAll(format.rx)) {
+      const date = toDate(format.get(g));
+      if (date) {
+        hits.push({ at: g.index!, end: g.index! + g[0].length, date, weak: format.weak?.(g) ?? false });
+      }
+    }
+  }
+  hits.sort((a, b) => a.at - b.at || b.end - a.end);
+  const result: DateHit[] = [];
+  for (const hit of hits) {
+    if (!result.length || hit.at >= result[result.length - 1].end) result.push(hit);
+  }
+  return result;
+}
 
 export function parseProductDate(value?: string | null): Date | null {
-  if (!value) return null;
-  let trimmed = value.trim();
-  if (!trimmed) return null;
-
-  // --- OCR error correction pre-pass ---
-  trimmed = fixOcrErrors(trimmed);
-
-  // 0. ISO: YYYY-MM-DD (what <input type="date"> and formatDateForInput emit)
-  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) {
-    return validDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  }
-
-  // 1. Full numeric: DD/MM/YYYY, DD-MM-YYYY
-  const numeric = trimmed.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})$/);
-  if (numeric) {
-    const day = Number(numeric[1]);
-    const month = Number(numeric[2]) - 1;
-    const year = normalizeYear(numeric[3]);
-    return validDate(year, month, day);
-  }
-
-  // 2. Full dotted: DD.MM.YYYY
-  const dotted = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
-  if (dotted) {
-    const day = Number(dotted[1]);
-    const month = Number(dotted[2]) - 1;
-    const year = normalizeYear(dotted[3]);
-    return validDate(year, month, day);
-  }
-
-  // 3. Numeric month/year: MM/YYYY, MM-YYYY, MM/YY, MM.YY
-  const monthYear = trimmed.match(/^(\d{1,2})[/\-.](\d{2,4})$/);
-  if (monthYear) {
-    const month = Number(monthYear[1]) - 1;
-    const year = normalizeYear(monthYear[2]);
-    if (month >= 0 && month <= 11) {
-      return new Date(year, month + 1, 0, 12, 0, 0); // last day of month
-    }
-  }
-
-  // 4. Named full: DD Mon YYYY / DD MON YY (e.g. "21 Oct 2026", "21 OCT 26")
-  const named = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
-  if (named) {
-    const month = monthNames[named[2].toLowerCase()];
-    if (month !== undefined) {
-      return validDate(normalizeYear(named[3]), month, Number(named[1]));
-    }
-  }
-
-  // 5. Month-name + year: "OCT/26", "Oct-2026", "Oct 2026", "October 2026", "OCT.26"
-  const monthNameYear = trimmed.match(/^([A-Za-z]+)[/\-.\s]+(\d{2,4})$/);
-  if (monthNameYear) {
-    const monthKey = monthNameYear[1].toLowerCase();
-    const month = monthNames[monthKey] ?? monthNames[monthKey.substring(0, 3)];
-    if (month !== undefined) {
-      const year = normalizeYear(monthNameYear[2]);
-      return new Date(year, month + 1, 0, 12, 0, 0); // last day of month
-    }
-  }
-
-  // 6. Concatenated month-name + year without separator: "oct26", "OCT26", "OCT2026"
-  const concatMonthYear = trimmed.match(/^([A-Za-z]{3,})(\d{2,4})$/);
-  if (concatMonthYear) {
-    const monthKey = concatMonthYear[1].toLowerCase();
-    const month = monthNames[monthKey] ?? monthNames[monthKey.substring(0, 3)];
-    if (month !== undefined) {
-      const year = normalizeYear(concatMonthYear[2]);
-      return new Date(year, month + 1, 0, 12, 0, 0); // last day of month
-    }
-  }
-
-  // 7. Year + month-name: "2026 OCT", "2026-Oct", "2026/October"
-  const yearMonthName = trimmed.match(/^(\d{4})[/\-.\s]+([A-Za-z]+)$/);
-  if (yearMonthName) {
-    const monthKey = yearMonthName[2].toLowerCase();
-    const month = monthNames[monthKey] ?? monthNames[monthKey.substring(0, 3)];
-    if (month !== undefined) {
-      return new Date(Number(yearMonthName[1]), month + 1, 0, 12, 0, 0);
-    }
-  }
-
-  return null;
+  return value ? findDateHits(value)[0]?.date ?? null : null;
 }
 
 /**
- * Fix common OCR character-confusion errors in date strings.
- * E.g. "0CT" → "OCT", "2l" → "21", "I0" → "10"
+ * Fix common OCR character confusions in dates ("0CT" → "OCT", "2l" → "21",
+ * "O5" → "05"). One-for-one replacements, so string positions don't shift.
  */
-function fixOcrErrors(text: string): string {
-  let fixed = text;
-  // Fix "0CT" → "OCT" (zero mistaken for O)
-  fixed = fixed.replace(/\b0CT\b/g, "OCT");
-  // Fix "0ct" → "oct"
-  fixed = fixed.replace(/\b0ct\b/g, "oct");
-  // Fix lowercase L mistaken for 1 in numeric context
-  fixed = fixed.replace(/(\d)l/g, "$11");
-  fixed = fixed.replace(/l(\d)/g, "1$1");
-  // Fix uppercase I mistaken for 1 in numeric context
-  fixed = fixed.replace(/(\d)I/g, "$11");
-  fixed = fixed.replace(/I(\d)/g, "1$1");
-  // Fix uppercase O mistaken for 0 in numeric context
-  fixed = fixed.replace(/(\d)O/g, "$10");
-  fixed = fixed.replace(/O(\d)/g, "0$1");
-  // Collapse multiple spaces
-  fixed = fixed.replace(/\s+/g, " ").trim();
-  return fixed;
+export function fixOcrErrors(text: string): string {
+  return text
+    .replace(/(?<![a-z])0(?=ct(?![a-z]))/gi, "O")
+    .replace(/(?<=n)0(?=v(?![a-z]))/gi, "O")
+    .replace(/(?<=\d)[lI](?=[\d./-])|(?<![A-Za-z])[lI](?=\d)/g, "1")
+    .replace(/(?<=\d)O(?=[\d./-])|(?<![A-Za-z])O(?=\d)/g, "0");
 }
 
 /**
@@ -255,21 +234,4 @@ export function fromDateInput(value: string): string | null {
   if (!value) return null;
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
-}
-
-function normalizeYear(value: string): number {
-  const year = Number(value);
-  return year < 100 ? 2000 + year : year;
-}
-
-function validDate(year: number, month: number, day: number): Date | null {
-  const date = new Date(year, month, day, 12, 0, 0);
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-  return date;
 }

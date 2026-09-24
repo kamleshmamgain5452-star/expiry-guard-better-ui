@@ -5,6 +5,14 @@ import { Card } from "@/components/Card";
 import { useI18n } from "@/hooks/useI18n";
 import type { IodineApiResult, IodineFood, IodineIntensity } from "@/types/product";
 
+const PH_MARKER: Record<string, number> = {
+  strong_acidic: 5,
+  weak_acidic: 25,
+  neutral: 50,
+  weak_alkaline: 75,
+  strong_alkaline: 95
+};
+
 type PurityResultScreenProps = {
   result: IodineApiResult;
   food: IodineFood;
@@ -34,8 +42,15 @@ export function PurityResultScreen({
   onRetest
 }: PurityResultScreenProps) {
   const { t } = useI18n();
+  const isPh = result.testKind === "ph" || food === "other";
 
-  const verdictStyle = {
+  const verdictStyle = isPh
+    ? {
+        icon: HelpCircle,
+        ring: "bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200",
+        bar: "bg-sky-500"
+      }
+    : ({
     pure: {
       icon: CheckCircle2,
       ring: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
@@ -51,13 +66,18 @@ export function PurityResultScreen({
       ring: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
       bar: "bg-amber-500"
     }
-  }[result.verdict];
+      }[result.verdict]);
 
   const VerdictIcon = verdictStyle.icon;
   const confidencePct = Math.round(result.confidence * 100);
   const intensityIdx = INTENSITY_INDEX[result.intensity];
-  // Position the marker on the amber→blue-black reference scale.
-  const markerPct = [6, 36, 66, 92][intensityIdx];
+  // No marker for an unclear reading — any position would look like a result.
+  const unclear = isPh ? !result.phCategory || result.phCategory === "unknown" : result.verdict === "inconclusive";
+  const markerPct = unclear
+    ? null
+    : isPh
+    ? PH_MARKER[result.phCategory!]
+    : [6, 36, 66, 92][intensityIdx];
 
   return (
     <main className="h-full w-full overflow-y-auto no-scrollbar px-4 pb-28 pt-4 safe-top">
@@ -87,10 +107,12 @@ export function PurityResultScreen({
         </span>
         <div className="min-w-0">
           <p className="text-xl font-black leading-tight">
-            {t(`verdict_${result.verdict}` as "verdict_pure")}
+            {isPh
+              ? t(result.phCategory === "unknown" ? "phEstimateUnclear" as any : "phEstimateTitle" as any)
+              : t(`verdict_${result.verdict}` as "verdict_pure")}
           </p>
           <p className="mt-0.5 text-sm font-bold opacity-80">
-            {t(`food_${food}` as "food_milk")}
+            {t(`food_${food}` as "food_dairy")}
             {productName ? ` · ${productName}` : ""}
           </p>
         </div>
@@ -100,37 +122,54 @@ export function PurityResultScreen({
         <img
           src={imageDataUrl}
           alt={t("purityColorMatch")}
+          width={640}
+          height={320}
           className="mt-4 h-40 w-full rounded-[28px] object-cover"
         />
       )}
 
-      {/* Starch level gauge */}
-      <Card className="mt-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-black text-slate-950 dark:text-white">
-            {t("purityStarchLevel")}
-          </p>
+      {isPh ? (
+        <Card className="mt-4">
           <p className="text-sm font-black text-slate-500 dark:text-slate-300">
-            {t(`intensity_${result.intensity}` as "intensity_none")}
+            {t("phEstimatedRange" as any)}
           </p>
-        </div>
-        <div
-          className="mt-3 flex gap-1.5"
-          role="img"
-          aria-label={`${t("purityStarchLevel")}: ${t(`intensity_${result.intensity}` as "intensity_none")}`}
-        >
-          {[0, 1, 2, 3].map((seg) => (
-            <span
-              key={seg}
-              className={`h-2.5 flex-1 rounded-full ${
-                seg <= intensityIdx
-                  ? verdictStyle.bar
-                  : "bg-slate-200 dark:bg-white/10"
-              }`}
-            />
-          ))}
-        </div>
-      </Card>
+          <p className="mt-1 text-3xl font-black tabular-nums text-slate-950 dark:text-white">
+            {result.estimatedPhRange === "unknown"
+              ? t("notDetected")
+              : `pH ${result.estimatedPhRange || t("notDetected")}`}
+          </p>
+          <p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">
+            {t(`phCategory_${result.phCategory || "unknown"}` as any)}
+          </p>
+        </Card>
+      ) : result.verdict === "inconclusive" ? null : (
+        <Card className="mt-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-black text-slate-950 dark:text-white">
+              {t("purityStarchLevel")}
+            </p>
+            <p className="text-sm font-black text-slate-500 dark:text-slate-300">
+              {t(`intensity_${result.intensity}` as "intensity_none")}
+            </p>
+          </div>
+          <div
+            className="mt-3 flex gap-1.5"
+            role="img"
+            aria-label={`${t("purityStarchLevel")}: ${t(`intensity_${result.intensity}` as "intensity_none")}`}
+          >
+            {[0, 1, 2, 3].map((seg) => (
+              <span
+                key={seg}
+                className={`h-2.5 flex-1 rounded-full ${
+                  seg <= intensityIdx
+                    ? verdictStyle.bar
+                    : "bg-slate-200 dark:bg-white/10"
+                }`}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Colour-match reference bar */}
       <Card className="mt-3">
@@ -151,16 +190,24 @@ export function PurityResultScreen({
           </span>
         </div>
         <div className="relative mt-4">
-          <div className="h-3 w-full rounded-full bg-gradient-to-r from-[#d9a441] via-[#7a5fb0] to-[#101733]" />
-          <span
-            className="absolute -top-1 h-5 w-5 -translate-x-1/2 rounded-full border-2 border-white bg-slate-900 shadow dark:border-slate-900 dark:bg-white"
-            style={{ left: `${markerPct}%` }}
-            aria-hidden
+          <div
+            className={`h-3 w-full rounded-full ${
+              isPh
+                ? "bg-gradient-to-r from-red-500 via-yellow-400 via-green-500 via-blue-500 to-purple-600"
+                : "bg-gradient-to-r from-[#d9a441] via-[#7a5fb0] to-[#101733]"
+            }`}
           />
+          {markerPct !== null && (
+            <span
+              className="absolute -top-1 h-5 w-5 -translate-x-1/2 rounded-full border-2 border-white bg-slate-900 shadow dark:border-slate-900 dark:bg-white"
+              style={{ left: `${markerPct}%` }}
+              aria-hidden
+            />
+          )}
         </div>
         <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-wide text-slate-400">
-          <span>{t("purityReferenceAmber")}</span>
-          <span>{t("purityReferenceBlue")}</span>
+          <span>{isPh ? t("purityReferenceAcidic" as any) : t("purityReferenceAmber")}</span>
+          <span>{isPh ? t("purityReferenceAlkaline" as any) : t("purityReferenceBlue")}</span>
         </div>
       </Card>
 
@@ -193,7 +240,7 @@ export function PurityResultScreen({
       </Card>
 
       <p className="mt-4 px-1 text-xs font-semibold leading-5 text-slate-400 dark:text-slate-500">
-        {t("purityDisclaimer")}
+        {t(isPh ? "phDisclaimer" as any : "purityDisclaimer")}
       </p>
 
       <div className="mt-5 grid grid-cols-2 gap-3">

@@ -1,6 +1,6 @@
 import type { IodineApiResult, IodineFood } from "@/types/product";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
 
 type AnalyzeArgs = {
   image: Blob;
@@ -21,8 +21,14 @@ export async function analyzeIodineTest({
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Test failed");
+    let message = "The test could not be analyzed. Please try another photo.";
+    try {
+      const payload = (await response.json()) as { error?: string; detail?: string };
+      message = payload.error || payload.detail || message;
+    } catch {
+      // Keep the actionable fallback if a proxy returns HTML.
+    }
+    throw new Error(message);
   }
 
   return response.json() as Promise<IodineApiResult>;

@@ -14,10 +14,12 @@ import {
   validateAndCorrectDates
 } from "@/utils/dates";
 import { parseRelativeExpiry } from "@/utils/ocrParser";
+import { getMatchedAllergens } from "@/utils/allergy";
 
 type ScanResultScreenProps = {
   result: ScanResult;
   imageDataUrl?: string;
+  allergens: string[];
   onBack: () => void;
   onRescan: () => void;
   onConfirm: (result: ScanResult) => void;
@@ -26,6 +28,7 @@ type ScanResultScreenProps = {
 export function ScanResultScreen({
   result,
   imageDataUrl,
+  allergens,
   onBack,
   onRescan,
   onConfirm
@@ -36,6 +39,9 @@ export function ScanResultScreen({
   const [dateMessage, setDateMessage] = useState<string | null>(null);
   const days = daysUntil(draft.expiry_date);
   const status = statusFromExpiry(draft.expiry_date);
+  const matchedAllergens = useMemo(() => {
+    return getMatchedAllergens(draft.product_name || "", draft.raw_text, allergens);
+  }, [draft.product_name, draft.raw_text, allergens]);
   const confidencePercent = Math.round((draft.confidence || 0) * 100);
   const lowConfidence = draft.confidence < 0.75 || !draft.expiry_date;
 
@@ -104,6 +110,22 @@ export function ScanResultScreen({
           </p>
         </div>
       </header>
+
+      {matchedAllergens.length > 0 && (
+        <Card className="mb-4 border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/50">
+          <div className="flex gap-3">
+            <ShieldAlert className="h-6 w-6 shrink-0 text-red-600 dark:text-red-400" />
+            <div>
+              <p className="font-black text-red-900 dark:text-red-100">
+                {t("allergyWarningTitle" as any)}
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-red-800 dark:text-red-200">
+                {t("allergyWarningDesc" as any)} <strong className="font-black">{matchedAllergens.join(", ")}</strong>
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {imageDataUrl && (
         <motion.img

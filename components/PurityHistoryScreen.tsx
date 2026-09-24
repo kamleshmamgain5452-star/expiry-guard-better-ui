@@ -68,7 +68,8 @@ export function PurityHistoryScreen({
       ) : (
         <div className="space-y-3">
           {tests.map((test, index) => {
-            const Icon = VERDICT_ICON[test.verdict];
+            const isPh = test.testKind === "ph" || test.food === "other";
+            const Icon = isPh ? HelpCircle : VERDICT_ICON[test.verdict];
             return (
               <motion.div
                 key={test.id}
@@ -85,17 +86,25 @@ export function PurityHistoryScreen({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black ${VERDICT_TONE[test.verdict]}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black ${
+                        isPh
+                          ? "bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
+                          : VERDICT_TONE[test.verdict]
+                      }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
-                      {t(`verdict_${test.verdict}` as "verdict_pure")}
+                      {isPh
+                        ? t("phEstimateTitle" as any)
+                        : t(`verdict_${test.verdict}` as "verdict_pure")}
                     </span>
                   </div>
                   <p className="mt-1 truncate text-sm font-black text-slate-950 dark:text-white">
-                    {test.productName || t(`food_${test.food}` as "food_milk")}
+                    {test.productName || t(`food_${test.food}` as "food_dairy")}
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-                    {t(`intensity_${test.intensity}` as "intensity_none")} ·{" "}
+                    {isPh
+                      ? `${t("phShort" as any)} ${test.estimatedPhRange || t("notDetected")}`
+                      : t(`intensity_${test.intensity}` as "intensity_none")} ·{" "}
                     {new Date(test.createdAt).toLocaleDateString(
                       locale === "hi" ? "hi-IN" : "en-US",
                       { day: "numeric", month: "short", year: "numeric" }
@@ -104,7 +113,9 @@ export function PurityHistoryScreen({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onDelete(test.id)}
+                  onClick={() => {
+                    if (window.confirm(t("purityDeleteConfirm" as any))) onDelete(test.id);
+                  }}
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-white/5 dark:hover:text-red-400"
                   aria-label={t("delete")}
                 >

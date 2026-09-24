@@ -1,87 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { groqChat, GROQ_VISION_MODEL } from "@/lib/groq";
-import type {
-  IodineApiResult,
-  IodineIntensity,
-  PurityVerdict
-} from "@/types/product";
+import {
+  coercePhResult,
+  coerceStarchResult,
+  measureCenterColour,
+  parseModelJson,
+  systemPrompt
+} from "@/lib/purity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const FOOD_LABEL: Record<string, string> = {
-  milk: "milk",
-  ghee: "ghee (clarified butter)",
-  other: "a food sample"
-};
-
-function systemPrompt(food: string): string {
-  const label = FOOD_LABEL[food] || FOOD_LABEL.other;
-  return `You analyze a photograph of ${label} after an iodine (Lugol's) starch test.
-
-Chemistry: iodine reacts with STARCH to turn dark blue / blue-black / dark purple.
-With NO starch, iodine stays amber / brown / yellow-orange (no darkening).
-For this food, starch is an ADULTERANT, so a blue-black reaction means adulteration.
-
-Examine the dominant colour of the sample. Respond with ONLY a JSON object, no markdown:
-{
-  "starchPresent": boolean,
-  "intensity": "none" | "trace" | "moderate" | "high",
-  "colorHex": "#rrggbb",
-  "colorName": "short plain colour name e.g. amber, dark blue-black",
-  "verdict": "pure" | "adulterated" | "inconclusive",
-  "confidence": number between 0 and 1,
-  "note": "one short plain sentence explaining the result"
-}
-
-Rules:
-- starchPresent is true ONLY if a clear blue / black / dark-purple shift is visible.
-- If lighting is poor, the sample is unclear, or you cannot tell, use verdict "inconclusive" with low confidence.
-- verdict "adulterated" when starchPresent is true; "pure" when clearly no starch (amber/brown).`;
-}
-
-const INTENSITIES: IodineIntensity[] = ["none", "trace", "moderate", "high"];
-const VERDICTS: PurityVerdict[] = ["pure", "adulterated", "inconclusive"];
-
-function coerceResult(raw: unknown): IodineApiResult {
-  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-
-  const intensity = INTENSITIES.includes(o.intensity as IodineIntensity)
-    ? (o.intensity as IodineIntensity)
-    : "none";
-  let verdict = VERDICTS.includes(o.verdict as PurityVerdict)
-    ? (o.verdict as PurityVerdict)
-    : "inconclusive";
-  const starchPresent = o.starchPresent === true;
-
-  // Keep verdict and starchPresent consistent.
-  if (starchPresent && verdict === "pure") verdict = "adulterated";
-
-  let confidence = typeof o.confidence === "number" ? o.confidence : 0.5;
-  confidence = Math.max(0, Math.min(1, confidence));
-
-  const colorHex =
-    typeof o.colorHex === "string" && /^#?[0-9a-fA-F]{6}$/.test(o.colorHex)
-      ? o.colorHex.startsWith("#")
-        ? o.colorHex
-        : `#${o.colorHex}`
-      : "#b8860b";
-
-  return {
-    starchPresent,
-    intensity,
-    colorHex,
-    colorName:
-      typeof o.colorName === "string" && o.colorName ? o.colorName.slice(0, 40) : "unclear",
-    verdict,
-    confidence,
-    note:
-      typeof o.note === "string" && o.note
-        ? o.note.slice(0, 200)
-        : "Result could not be determined clearly."
-  };
-}
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
@@ -92,15 +23,39 @@ export async function POST(req: NextRequest) {
     if (!imageFile) {
       return NextResponse.json({ error: "Missing image file" }, { status: 400 });
     }
+    if (food !== "dairy" && food !== "other") {
+      return NextResponse.json(
+        { error: "Choose a supported test type." },
+        { status: 400 }
+      );
+    }
+    if (!imageFile.type.startsWith("image/")) {
+      return NextResponse.json({ error: "Upload an image file." }, { status: 400 });
+    }
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        { error: "Image is too large. Choose an image under 8 MB." },
+        { status: 413 }
+      );
+    }
 
     // Downscale + compress to keep token/latency cost low.
     const buffer = Buffer.from(await imageFile.arrayBuffer());
-    const jpeg = await sharp(buffer)
-      .rotate()
-      .resize(800, 800, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toBuffer();
+    let jpeg: Buffer;
+    try {
+      jpeg = await sharp(buffer)
+        .rotate()
+        .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    } catch {
+      return NextResponse.json(
+        { error: "The image could not be read. Choose another photo." },
+        { status: 400 }
+      );
+    }
     const base64 = jpeg.toString("base64");
+    const colorEvidence = await measureCenterColour(jpeg);
 
     const payload = {
       model: GROQ_VISION_MODEL,
@@ -111,7 +66,10 @@ export async function POST(req: NextRequest) {
           content: [
             {
               type: "text",
-              text: "Analyze this iodine starch-test photo. Return JSON only."
+              text:
+                food === "other"
+                  ? "Estimate only the universal-indicator pH colour category. Return JSON only."
+                  : "Assess only whether this milk test shows a blue-black starch reaction. Return JSON only."
             },
             {
               type: "image_url",
@@ -121,27 +79,22 @@ export async function POST(req: NextRequest) {
         }
       ],
       temperature: 0.1,
-      max_tokens: 500
+      max_tokens: 800,
+      reasoning_effort: "none"
     };
 
-    let content = await groqChat(payload);
-    if (content.startsWith("```")) {
-      content = content.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      // Model returned prose — surface an inconclusive result rather than 500.
-      return NextResponse.json(
-        coerceResult({ verdict: "inconclusive", confidence: 0.2 })
-      );
-    }
-
-    return NextResponse.json(coerceResult(parsed));
+    // Unparseable replies still return a (necessarily inconclusive) result.
+    const parsed = parseModelJson(await groqChat(payload));
+    return NextResponse.json(
+      food === "other"
+        ? coercePhResult(parsed, colorEvidence)
+        : coerceStarchResult(parsed, colorEvidence)
+    );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 503 });
+    console.error("Purity test analysis failed:", err);
+    return NextResponse.json(
+      { error: "The test service is busy right now. Please try again in a moment." },
+      { status: 503 }
+    );
   }
 }

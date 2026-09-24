@@ -75,7 +75,8 @@ export function useProducts() {
       createdAt: new Date().toISOString(),
       quantity: result.quantity,
       category: result.category,
-      notes: result.notes
+      notes: result.notes,
+      rawText: result.raw_text
     };
     setProducts((current) => [product, ...current]);
     return product;

@@ -40,7 +40,11 @@ export async function nextKeyIndex(count: number): Promise<number> {
   }
 }
 
-export const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+// Groq retired Llama 4 Scout, which made every image request fail with a 404.
+// Keep this overridable so a future model retirement can be handled from the
+// deployment settings without requiring another code change.
+export const GROQ_VISION_MODEL =
+  process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Send a chat/vision request to Groq, rotating across keys and failing over to
@@ -57,14 +61,23 @@ export async function groqChat(payload: object): Promise<string> {
 
   for (let attempt = 0; attempt < keys.length; attempt++) {
     const idx = (start + attempt) % keys.length;
-    const res = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${keys[idx]}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+    let res: Response;
+    try {
+      res = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${keys[idx]}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
+        // A stalled request would otherwise leave the user on a spinner.
+        signal: AbortSignal.timeout(25_000)
+      });
+    } catch (err) {
+      // Network error or timeout on this key — try the next one.
+      lastError = err instanceof Error ? err.message : String(err);
+      continue;
+    }
 
     if (res.ok) {
       const data = await res.json();

@@ -1,5 +1,6 @@
-import { ArrowLeft, Barcode, CalendarDays, Check, Folder, Layers, Package, Trash2, FlaskConical, CheckCircle2, AlertTriangle, HelpCircle } from "lucide-react";
+import { ArrowLeft, Barcode, CalendarDays, Check, Folder, Layers, Package, Trash2, FlaskConical, CheckCircle2, AlertTriangle, HelpCircle, ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -8,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useI18n } from "@/hooks/useI18n";
 import type { Product, PurityTest, PurityVerdict } from "@/types/product";
 import { daysUntil, freshnessPercent, upcomingWeekday } from "@/utils/dates";
+import { getMatchedAllergens } from "@/utils/allergy";
 
 type ProductDetailScreenProps = {
   product: Product;
@@ -16,6 +18,7 @@ type ProductDetailScreenProps = {
   onDelete?: () => void;
   onRunPurityTest?: () => void;
   purityTest?: PurityTest | null;
+  allergens: string[];
 };
 
 const PURITY_ICON: Record<PurityVerdict, typeof CheckCircle2> = {
@@ -30,11 +33,14 @@ const PURITY_TONE: Record<PurityVerdict, string> = {
   inconclusive: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
 };
 
-export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete, onRunPurityTest, purityTest }: ProductDetailScreenProps) {
+export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete, onRunPurityTest, purityTest, allergens }: ProductDetailScreenProps) {
   const { t, locale } = useI18n();
   const days = daysUntil(product.expiryDate);
   const freshness = freshnessPercent(product.expiryDate);
   const weekday = upcomingWeekday(product.expiryDate, locale);
+  const matchedAllergens = useMemo(() => {
+    return getMatchedAllergens(product.productName || "", product.rawText, allergens);
+  }, [product.productName, product.rawText, allergens]);
   const expiryDisplay = product.expiryDate
     ? weekday
       ? `${product.expiryDate} · ${weekday}`
@@ -61,6 +67,22 @@ export function ProductDetailScreen({ product, onBack, onMarkUsed, onDelete, onR
           </h1>
         </div>
       </header>
+
+      {matchedAllergens.length > 0 && (
+        <Card className="mb-4 border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/50">
+          <div className="flex gap-3">
+            <ShieldAlert className="h-6 w-6 shrink-0 text-red-600 dark:text-red-400" />
+            <div>
+              <p className="font-black text-red-900 dark:text-red-100">
+                {t("allergyWarningTitle" as any)}
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-red-800 dark:text-red-200">
+                {t("allergyWarningDesc" as any)} <strong className="font-black">{matchedAllergens.join(", ")}</strong>
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <motion.section
         initial={{ opacity: 0, y: 18 }}

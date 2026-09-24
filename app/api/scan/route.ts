@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { parseOcrResult } from "@/utils/ocrParser";
-import { getGroqKeys, nextKeyIndex } from "@/lib/groq";
+import { getGroqKeys, GROQ_VISION_MODEL, nextKeyIndex } from "@/lib/groq";
 
 export const dynamic = "force-dynamic";
 
-const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const SYSTEM_PROMPT = `You are an expert OCR and metadata extraction system for packaged product labels.
@@ -19,8 +18,8 @@ Extract ALL visible text from the image. Pay special attention to:
 Return the extracted text as a JSON object with these fields:
 {
   "all_text": ["line1", "line2", ...],
-  "expiry_date": "DD/MM/YYYY or null if not found",
-  "mfd_date": "DD/MM/YYYY or null if not found", 
+  "expiry_date": "expiry/best-before/use-by date exactly as printed, e.g. \"04/02/2027\", \"FEB 2027\", \"05AUG26\"; or the printed shelf life if there is no date, e.g. \"12 months from manufacture\"; or null",
+  "mfd_date": "manufacturing/packing date exactly as printed, or null",
   "product_name": "product name or null if not found",
   "barcode": "barcode number or null if not found",
   "batch_number": "batch number or lot number or null if not found",
@@ -29,7 +28,8 @@ Return the extracted text as a JSON object with these fields:
 
 IMPORTANT:
 - Return ONLY valid JSON, no markdown code blocks, no explanation.
-- For dates, try to normalize to DD/MM/YYYY format. If ambiguous, keep as-is.
+- Copy dates exactly as printed. Do not reformat them, swap day and month, invent a missing day, or calculate a date from a shelf life.
+- In all_text, keep each date on the same line as its label word (e.g. "EXP: 04/02/2027").
 - If a barcode is visible, extract the numbers underneath it.
 - Set confidence between 0.0 and 1.0 based on image clarity.
 `;
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = {
-      model: GROQ_MODEL,
+      model: GROQ_VISION_MODEL,
       messages: [
         {
           role: "system",
@@ -104,12 +104,13 @@ export async function POST(req: NextRequest) {
         },
       ],
       temperature: 0.1,
-      max_tokens: 1024,
+      max_tokens: 2048,
+      reasoning_effort: "none",
     };
 
-    // Rotate across all keys and fail over to the next one on rate-limit (429),
-    // auth (401/403) or server (5xx) errors, so a scan succeeds as long as any
-    // key has capacity. Other errors (e.g. 400) stop early — a key swap won't help.
+    // Start at a round-robin key and fail over across every configured key on
+    // rate-limit (429), auth (401/403), or server (5xx) errors. A malformed
+    // request (400) stops immediately because changing credentials cannot fix it.
     const start = await nextKeyIndex(groqKeys.length);
     let response: Response | null = null;
     let lastStatus = 0;
@@ -147,8 +148,14 @@ export async function POST(req: NextRequest) {
 
     if (!response) {
       console.error("Groq API error (all keys exhausted):", lastStatus, lastError);
+      const modelUnavailable =
+        lastStatus === 404 && /model|not found|does not exist/i.test(lastError);
       return NextResponse.json(
-        { error: `Groq OCR failed: Status ${lastStatus}` },
+        {
+          error: modelUnavailable
+            ? "The OCR model is temporarily unavailable. Please try again later."
+            : `Label scan failed (service status ${lastStatus || 503}).`
+        },
         { status: 503 }
       );
     }
@@ -156,16 +163,19 @@ export async function POST(req: NextRequest) {
     const responseData = await response.json();
     let content = responseData.choices?.[0]?.message?.content?.trim() || "";
 
-    // Clean markdown formatting if any
-    if (content.startsWith("```")) {
-      const lines = content.split("\n");
-      if (lines[0].startsWith("```")) {
-        lines.shift();
-      }
-      if (lines.length > 0 && lines[lines.length - 1].trim() === "```") {
-        lines.pop();
-      }
-      content = lines.join("\n").trim();
+    // Some reasoning models wrap the answer in <think>…</think> and/or a JSON
+    // code fence even when explicitly asked for JSON only. Strip both wrappers
+    // before parsing so internal reasoning can never be mistaken for label text.
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    const fencedJson = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fencedJson) content = fencedJson[1].trim();
+
+    // If the model adds a short sentence around its answer, keep only the
+    // outermost JSON object.
+    const objectStart = content.indexOf("{");
+    const objectEnd = content.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      content = content.slice(objectStart, objectEnd + 1);
     }
 
     // 3. Parse result
